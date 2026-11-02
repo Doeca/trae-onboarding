@@ -1,6 +1,12 @@
 # Trae Full 席位 API 轮询脚本
 
-完整配置步骤、管理员账号密码及参数说明见 [使用说明](docs/USAGE.md)。首次运行先复制 `.env.example` 为 `.env` 并填写自己的配置。
+## Bash 入口（不依赖 Python）
+
+新版入口为 `bash onboarding.sh`，使用 Bash + curl + jq + GPG。先在本地终端运行 `bash onboarding.sh bootstrap`，交互确认安装与配置路径；再运行 `bash onboarding.sh doctor` 离线复检。缺失安装需要明确确认，不自行覆盖或升级。
+
+完整步骤见 [Bash 使用说明](docs/BASH-USAGE.md) 和 [交互环境安装说明](docs/BASH-SETUP.md)。运行 `bash tests/shell/run.sh` 执行 Bash 离线测试。新版使用独立 v2 状态，不自动导入旧 Python 批次。
+
+下文及 [原 Python 使用说明](docs/USAGE.md) 保留作为历史实现对照；Python 不是新版运行依赖。首次运行先复制 `.env.example` 为 `.env` 并填写自己的配置。
 
 把管理员所在企业当前可用的 **Full 席位**逐个邀请、注册并激活，然后通过原生 `magpie plugin login trae-cn` 接入隔离的账号存储。不使用浏览器、不调用 `magpie-trae-login`、不修改已安装插件、不购买席位。
 

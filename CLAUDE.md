@@ -1,6 +1,7 @@
 # Repository guidance
 
 - API-only enterprise onboarding. Use native `magpie plugin login trae-cn`; never operate a browser or use the historical login helper.
+- Bash entry point: `bash onboarding.sh`; setup is interactive `bootstrap`, offline readiness is `doctor`. Bash runtime uses curl/jq/GPG without Python and v2 state; retained Python is a reference, not a launcher. Bash tests: `bash tests/shell/run.sh`. Never auto-import Python v1 state or silently pick install/config paths.
 - Ordinary tests are offline: `PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v`. Do not run live `check`/`run` merely to inspect the project. Creating real members, inference, or altering live gateway settings requires authorization.
 - All temporary artifacts and runtime journals belong under `./tmp`. Never commit `.env`, credentials, gateway keys, runtime state or raw HARs. Use synthetic fixtures, not captured credentials.
 - Read `README.md` and `docs/USAGE.md` for supported parameters and known limitations. Installed Magpie is external; inspect the actual native contract before relying on undocumented fields.
