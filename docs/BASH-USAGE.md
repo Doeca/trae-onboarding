@@ -2,7 +2,7 @@
 
 ## 改造范围
 
-入口为 `bash onboarding.sh`，业务编排、HTTP、JSON、持久化及恢复使用 Bash + curl + jq + GPG，不调用 Python。原有 Python 版暂保留作为对照和回归测试，不是 Bash 的运行依赖。Magpie 自身的 Bun/plugin 运行时仍然必需，原有小型 JavaScript 出站保护也保留；不启动或操作浏览器。
+入口为 `bash onboarding.sh`，业务编排、HTTP、JSON、持久化及恢复使用 Bash + curl + jq + GPG，不调用 Python。原有 Python 实现、测试与依赖已移除。Magpie 自身的 Bun/plugin 运行时仍然必需，原有小型 JavaScript 出站保护也保留；不启动或操作浏览器。
 
 Bash 版使用 **version 2 / engine bash** 的状态，拒绝读取旧 Python 状态，不能用新状态无脑重跑已处理过的企业。升级前核实旧批次是否还有未完成任务，原目录及状态保留，不自动迁移。
 

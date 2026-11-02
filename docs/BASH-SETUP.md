@@ -48,7 +48,7 @@ magpie plugin add @magpie-community/opencode-trae-auth@0.2.26
 
 ### 严格的已审核文件清单
 
-Bun / host 复用 `onboarding/magpie.py` 的清单；Magpie / 插件入口与 Bash 原生适配器的清单一致。不要求 Python 运行时：
+Magpie、插件入口及 Bun / host 的固定清单在 `shell/bootstrap.sh` 和 `shell/native.sh` 中维护，两处必须保持一致。不要求 Python 运行时：
 
 | 文件 | SHA256 |
 | --- | --- |
