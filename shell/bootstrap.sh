@@ -133,7 +133,7 @@ _bootstrap_confirm() {
     [[ $response == YES ]] || fail bootstrap_consent_declined
 }
 _bootstrap_ask_path() {
-    _bootstrap_ask "$1" "$2" "${3:-}"
+    _bootstrap_ask "$1" "$2 (press Enter to use the displayed default)" "${3:-}"
     _bootstrap_absolute "${!1}"
     _bootstrap_confirm "Use ${!1}?"
 }
@@ -209,6 +209,17 @@ _bootstrap_install_plugin() {
     emit native_plugin_installed
 }
 
+_bootstrap_default_magpie() {
+    local candidate
+    if [[ -n ${magpie_bin:-} ]]; then
+        printf '%s' "$magpie_bin"
+        return
+    fi
+    candidate=$(type -P magpie || true)
+    [[ -z $candidate ]] || candidate=$(realpath -e -- "$candidate" 2>/dev/null) || candidate=''
+    printf '%s' "${candidate:-${MAGPIE_BIN_DIR:-$HOME/.local/bin}/magpie}"
+}
+
 bootstrap_interactive() (
     # Subshell owns descriptors, umask and cleanup without disturbing the caller.
     _bootstrap_dependencies
@@ -228,9 +239,8 @@ bootstrap_interactive() (
         load_install_config
         _bootstrap_confirm 'Replace the saved onboarding installation path selection (no existing executables/plugins will be overwritten)?'
     fi
-    candidate=$(type -P magpie || true)
-    [[ -z $candidate ]] || candidate=$(realpath -e -- "$candidate" 2>/dev/null) || candidate=''
-    _bootstrap_ask_path magpie_bin 'Absolute path to existing Magpie, or a NEW executable filename in an existing user-owned directory' "${magpie_bin:-$candidate}"
+    candidate=$(_bootstrap_default_magpie)
+    _bootstrap_ask_path magpie_bin 'Absolute path to existing Magpie, or a NEW executable filename in an existing user-owned directory' "$candidate"
     _bootstrap_ask_path config_home 'Absolute native XDG config home (PARENT of magpie, not plugin directory)' "${config_home:-${XDG_CONFIG_HOME:-$HOME/.config}}"
     [[ -d $config_home && -w $config_home ]] || fail config_home_requires_manual_setup
     plugin_path=$(_bootstrap_plugin_path)

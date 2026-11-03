@@ -15,7 +15,7 @@ bash onboarding.sh bootstrap
 bash onboarding.sh doctor
 ```
 
-`bootstrap` 会询问 Magpie 可执行文件位置、配置位置、Trae 插件位置及所需运行时位置，并要求明确确认；不会私自选系统路径或覆盖已有安装。原生插件安装目录由所选 Magpie 配置位置决定，脚本展示派生路径供确认，不假装支持原生命令不存在的任意目录选项。
+`bootstrap` 会询问 Magpie 可执行文件位置、配置位置、Trae 插件位置及所需运行时位置。路径提示显示默认值，留空回车即可选用，随后仍须明确确认；不会覆盖已有安装。Magpie 可执行文件默认优先使用已保存的路径或 PATH 中的安装，否则使用 `$HOME/.local/bin/magpie`（尊重 `MAGPIE_BIN_DIR`）。原生插件安装目录由所选 Magpie 配置位置决定，脚本展示派生路径供确认，不假装支持原生命令不存在的任意目录选项。
 
 Magpie 缺失时输入审核过的 HTTPS 独立可执行文件下载地址和 SHA256，先下载到专用临时目录再校验安装，**不执行 curl | sh**。当前仅支持已审核 manifest 中的二进制、Trae 插件及 Bun/宿主版本，不自动接受 latest。缺失已审核的运行时文件时暂停，不能把“插件安装成功”当成运行环境已经齐备。
 

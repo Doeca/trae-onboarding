@@ -137,6 +137,61 @@ case_consent_declined() {
     _bootstrap_ask() { printf -v "$1" no; }
     expect_failure bootstrap_consent_declined _bootstrap_confirm 'synthetic consent'
 }
+case_default_magpie() {
+    fixture
+    unset magpie_bin MAGPIE_BIN_DIR
+    local HOME=$PROJECT/home
+    type() { return 1; }
+    [[ $(_bootstrap_default_magpie) == "$HOME/.local/bin/magpie" ]]
+    MAGPIE_BIN_DIR=$PROJECT/custom-bin
+    [[ $(_bootstrap_default_magpie) == "$MAGPIE_BIN_DIR/magpie" ]]
+}
+case_detected_magpie() {
+    fixture
+    local expected=$magpie_bin
+    unset magpie_bin
+    type() { printf '%s\n' "$expected"; }
+    [[ $(_bootstrap_default_magpie) == "$expected" ]]
+}
+case_saved_magpie() {
+    fixture
+    type() { return 1; }
+    [[ $(_bootstrap_default_magpie) == "$magpie_bin" ]]
+}
+mock_path_input() {
+    printf '%s' "$1" > "$TMP/input"
+    exec {TEST_INPUT}<"$TMP/input"
+    exec {BOOTSTRAP_TTY}>"$TMP/prompts"
+    # Keep real prompt/default/consent handling; split terminal input and output.
+    read() { builtin read -r -u "$TEST_INPUT" "${@: -1}"; }
+}
+case_path_enter_default() {
+    fixture
+    local selected='' output
+    mock_path_input $'\nYES\n'
+    output=$(_bootstrap_ask_path selected 'Magpie executable' "$magpie_bin"; [[ $selected == "$magpie_bin" ]])
+    [[ -z $output ]]
+    [[ $(<"$TMP/prompts") == *"[$magpie_bin]"* && $(<"$TMP/prompts") == *'press Enter'* ]]
+}
+case_path_explicit() {
+    fixture
+    local selected=''
+    mock_path_input "$PROJECT/other-magpie"$'\nYES\n'
+    _bootstrap_ask_path selected 'Magpie executable' "$magpie_bin"
+    [[ $selected == "$PROJECT/other-magpie" ]]
+}
+case_path_default_declined() {
+    fixture
+    local selected=''
+    mock_path_input $'\n\n'
+    expect_failure bootstrap_consent_declined _bootstrap_ask_path selected 'Magpie executable' "$magpie_bin"
+}
+case_path_eof() {
+    fixture
+    local selected=''
+    mock_path_input ''
+    expect_failure bootstrap_input_closed _bootstrap_ask_path selected 'Magpie executable' "$magpie_bin"
+}
 case_existing_bootstrap() {
     fixture; fake_runtime_hashes; mock_terminal
     local before after
@@ -283,7 +338,7 @@ case_nonlinux() {
     expect_failure linux_required _bootstrap_dependencies
 }
 count=0
-for test in load preflight bad_hash real_hash config_permissions config_symlink tmp_permissions config_injection control_json wrong_plugin_path plugin_version bridge no_terminal consent_declined existing_bootstrap verified_download download_bad_hash unsupported_manifest http_rejected network_retry permanent_no_retry nonelf_rejected symlink_parent native_plugin untrusted_binary_before_execution missing_runtime_before_install missing_dependency nonlinux; do
+for test in load preflight bad_hash real_hash config_permissions config_symlink tmp_permissions config_injection control_json wrong_plugin_path plugin_version bridge no_terminal consent_declined default_magpie detected_magpie saved_magpie path_enter_default path_explicit path_default_declined path_eof existing_bootstrap verified_download download_bad_hash unsupported_manifest http_rejected network_retry permanent_no_retry nonelf_rejected symlink_parent native_plugin untrusted_binary_before_execution missing_runtime_before_install missing_dependency nonlinux; do
     # Invoke the subshell as a simple command, preserving errexit inside tests.
     ("case_$test")
     printf 'ok %s\n' "$test"

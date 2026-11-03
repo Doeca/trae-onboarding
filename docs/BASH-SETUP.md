@@ -18,7 +18,9 @@
 
 只能在操作者本地控制终端执行 bootstrap。提示及路径只写入 `/dev/tty`，stdout 仅发出固定事件。无控制终端、存在任何 `LARK_CHANNEL*` 或 `LARKSUITE_CLI_CONFIG_DIR` 标记（包括空值）、开启 shell tracing 时拒绝。不要删除 bridge 标记绕过限制，不要录屏或将终端内容转发到群。
 
-所有路径必须为规范化绝对路径，不展开 `~`、环境变量或 shell 表达式。默认值仅是候选，每项都须输入 `YES`。可以从 PATH 查找现有 Magpie 并确认，不会直接安装/升级它。目标父目录和 config home 必须已存在；不会替用户创建任意目标目录。
+所有路径提示都会显示实际默认值，直接回车使用该值，也可输入自定义绝对路径；随后仍须输入 `YES` 确认。Magpie 可执行文件优先使用已保存的选择，其次使用 PATH 中已安装的 Magpie；均不存在时使用官方 Linux 安装器默认的 `$HOME/.local/bin/magpie`（设置了 `MAGPIE_BIN_DIR` 时为 `$MAGPIE_BIN_DIR/magpie`）。配置位置默认 `${XDG_CONFIG_HOME:-$HOME/.config}`，Bun/宿主默认使用 `${XDG_CACHE_HOME:-$HOME/.cache}/magpie` 下对应的固定版本路径；已有保存值优先。
+
+默认值在提示中展开为实际路径；手动输入仍必须为规范化绝对路径，不展开 `~`、环境变量或 shell 表达式。回车只选择路径，不表示同意安装、升级或写入配置。目标父目录和 config home 必须已存在；不会替用户创建任意目标目录。
 
 ### Magpie 缺失
 
