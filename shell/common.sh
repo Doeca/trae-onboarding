@@ -11,6 +11,11 @@ emit() {
 }
 fail() {
     local reason=$1
+    if ! command -v jq >/dev/null 2>&1; then
+        case $reason in *[!a-zA-Z0-9_]*|'') reason=bootstrap_failed;; esac
+        printf '{"event":"stopped","reason":"%s"}\n' "$reason" >&2
+        exit 1
+    fi
     if [[ ${STATE_READY:-0} == 1 && -f ${STATE_FILE:-} ]]; then
         jq --arg reason "$reason" '.status="PAUSED" | .reason=$reason | if .model_publication.status=="PENDING" then .model_publication.status="FAILED" else . end | if .gateway.status=="PENDING" then .gateway.status="FAILED" else . end' "$STATE_FILE" > "$RUN_DIR/failure.json" &&
             mv "$RUN_DIR/failure.json" "$STATE_FILE" && state_save || true

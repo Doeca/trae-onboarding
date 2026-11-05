@@ -10,7 +10,9 @@
 - `load_install_config`：严格读取 JSON，不使用 `eval` 或 source；导出 `magpie_bin`、`config_home`、`plugin_path`、`bun_path`、`host_path`，以及对应的 `MAGPIE_BIN`、`CONFIG_HOME`、`PLUGIN_PATH`、`BUN_PATH`、`HOST_PATH`。不导出/改变进程的 `XDG_CONFIG_HOME`，由原生适配器在其子进程中设置。
 - `environment_check`：加载配置，检查依赖、实际文件、固定插件版本和运行时 SHA256。成功输出 `environment_ready`，不会启动原生程序或联网。
 
-要求 Linux、Bash 4.4+、curl、jq、gpg、flock、timeout、setsid、sha256sum、sync、realpath 及常规 GNU 文件工具。缺少依赖时停止，由操作者自行通过可信方式准备；不会自动 sudo 或安装系统软件包。
+要求 Linux x86_64（glibc）和 Bash 4.4+。`bootstrap` 检测并补装缺失的 curl、jq、GPG、util-linux、coreutils、grep、diffutils、unzip 和 CA 证书。支持 Debian/Ubuntu 的 apt-get，以及 Fedora/RHEL/Rocky/AlmaLinux/CentOS 的 dnf/yum；其他发行版需自行准备系统工具。Bash 和发行版包管理器是启动前提，损坏的系统基础工具或缺失发行版签名密钥不会绕过检查。
+
+安装前在本地终端显示缺失命令、包名、仓库和权限要求；非 root 用户同意后才调用 sudo。只使用发行版仓库并保留签名验证，不执行全系统升级。安装下载、缓存和事务日志放在项目 `tmp/dependencies.*`，系统包数据库、锁和软件包脚本仍会修改系统路径。失败后保留日志，不自动重试未知的安装事务。`doctor` 始终只检查，缺少配置时也不转入安装。
 
 配置保存在项目 `tmp/shell-install.json`，仅含上述五个路径字段，文件要求当前用户所有、0600，`tmp` 要求当前用户所有且不允许组/其他用户访问（推荐 0700）。保存采用私有临时文件、sync、原子替换。现有目录权限不被自动修改；安装选择文件可在重新明确确认后替换，不覆盖现有 Magpie 可执行文件或插件。
 
@@ -18,17 +20,17 @@
 
 只能在操作者本地控制终端执行 bootstrap。提示及路径只写入 `/dev/tty`，stdout 仅发出固定事件。无控制终端、存在任何 `LARK_CHANNEL*` 或 `LARKSUITE_CLI_CONFIG_DIR` 标记（包括空值）、开启 shell tracing 时拒绝。不要删除 bridge 标记绕过限制，不要录屏或将终端内容转发到群。
 
-所有路径提示都会显示实际默认值，直接回车使用该值，也可输入自定义绝对路径；随后仍须输入 `YES` 确认。Magpie 可执行文件优先使用已保存的选择，其次使用 PATH 中已安装的 Magpie；均不存在时使用官方 Linux 安装器默认的 `$HOME/.local/bin/magpie`（设置了 `MAGPIE_BIN_DIR` 时为 `$MAGPIE_BIN_DIR/magpie`）。配置位置默认 `${XDG_CONFIG_HOME:-$HOME/.config}`，Bun/宿主默认使用 `${XDG_CACHE_HOME:-$HOME/.cache}/magpie` 下对应的固定版本路径；已有保存值优先。
+所有路径提示都会显示实际默认值，直接回车使用该值，也可输入自定义绝对路径；确认提示默认 `[YES]`，回车、`yes` 或 `y`（不区分大小写）表示同意，`no` 或其他输入取消。关闭输入（EOF）仍停止，不视为同意。Magpie 可执行文件优先使用已保存的选择，其次使用 PATH 中已安装的 Magpie；均不存在时使用官方 Linux 安装器默认的 `$HOME/.local/bin/magpie`（设置了 `MAGPIE_BIN_DIR` 时为 `$MAGPIE_BIN_DIR/magpie`）。配置位置默认 `${XDG_CONFIG_HOME:-$HOME/.config}`，Bun/宿主默认使用 `${XDG_CACHE_HOME:-$HOME/.cache}/magpie` 下对应的固定版本路径；已有保存值优先。
 
-默认值在提示中展开为实际路径；手动输入仍必须为规范化绝对路径，不展开 `~`、环境变量或 shell 表达式。回车只选择路径，不表示同意安装、升级或写入配置。目标父目录和 config home 必须已存在；不会替用户创建任意目标目录。
+默认值在提示中展开为实际路径；手动输入仍必须为规范化绝对路径，不展开 `~`、环境变量或 shell 表达式。路径输入处回车选择默认路径；确认提示处回车表示同意提示中描述的操作。所选安装目录或 config home 不存在时，单独提示后创建；不跟随软链接，不接管其他用户所有或组/其他用户可写的目录。已有文件不自动覆盖或升级。
 
 ### Magpie 缺失
 
 1. 指定一个不存在的可执行文件位置，其父目录须当前用户拥有且不可被组/其他用户写入。
-2. 手动提供可信的 **HTTPS 独立 Linux ELF 可执行文件 URL** 及从独立可信来源核实的 SHA256。
+2. URL 和 SHA256 提示默认填入已核实的 [Magpie v0.1.1364 CLI Linux amd64](https://github.com/yetone/magpie-releases/releases/tag/v0.1.1364) 发布文件及摘要，直接回车即可；可指定镜像 URL，但摘要仍必须匹配固定版本。
 3. 明确同意下载和安装。
 
-不会猜测发布 URL、解压归档、运行安装脚本或使用 `curl | sh`。下载进入项目 tmp 下新建的空目录，验证 SHA256 和 ELF 标识后才复制到目标；所有网络请求有内外超时，只允许 HTTPS 重定向。临时网络错误先进行一次有界探测，再最多重试一次；HTTP 拒绝/校验错误不重试。目标创建使用排他创建，不覆盖已有文件或软链接。写入中断可能留下新的不完整目标，必须人工检查处理，不会自动覆盖重试。用户提供的 SHA256 必须同时等于下方已审核的 Magpie 固定清单，否则在联网/安装前拒绝。已有 Magpie 也必须匹配该清单，原生命令执行前再次检查。其他版本即使来自可信发布也不自动接受；升级必须重新审查并同时更新原生适配器和此模块的清单。
+Magpie 下载固定独立 ELF，不运行安装脚本或使用 `curl | sh`。下载进入项目 tmp 下新建的空目录，验证 SHA256 和 ELF 标识后才复制到目标；所有网络请求有内外超时，只允许 HTTPS 重定向。临时网络错误先进行一次有界探测，再最多重试一次；HTTP 拒绝/校验错误不重试。目标创建使用排他创建，不覆盖已有文件或软链接。写入中断可能留下新的不完整目标，必须人工检查处理，不会自动覆盖重试。用户提供的 SHA256 必须同时等于下方已审核的 Magpie 固定清单，否则在联网/安装前拒绝。已有 Magpie 也必须匹配该清单，原生命令执行前再次检查。其他版本即使来自可信发布也不自动接受；升级必须重新审查并同时更新原生适配器和此模块的清单。
 
 ### Trae 原生插件
 
@@ -59,7 +61,9 @@ Magpie、插件入口及 Bun / host 的固定清单在 `shell/bootstrap.sh` 和 
 | Bun 1.4.4 (`magpie-bun`) | `10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235` |
 | `host-25ef7cf0d281.js` | `25ef7cf0d2813cc25a2e3675c28b5fa9ce9ec87f1b5a621803a193ab3929dbac` |
 
-操作者确认现有文件路径，Bun 还须可执行。缺失或校验不匹配会在任何安装前暂停；请从组织信任的来源准备与清单一致的文件后重试。模块不自动下载未经核实的运行时，也不自动更改固定清单。文件和其父目录软链接不受支持。这个清单限制了可用平台/版本；文件存在且匹配不等于企业登录、续期或模型调用已验证。
+Bun 缺失时下载 [官方 1.4.4 Linux x64 baseline ZIP](https://github.com/oven-sh/bun/releases/tag/bun-v1.4.4)，校验归档和二进制摘要，只提取指定成员到私有临时文件，不按归档路径展开。宿主缺失时下载 [固定提交的原始 host.js](https://github.com/yetone/magpie/blob/dd1e8822d916f8aeb085db4db93fc3d79e2263ed/internal/plugin/host.js)，校验后原样保存，不通过运行登录、模型列表或网关来提取宿主。
+
+已有但校验不匹配的文件仍停止，不擅自替换；只补装缺失文件。文件和其父目录软链接不受支持。不自动切换 latest，也不自动更改固定清单。这套清单仅支持 Linux x86_64/glibc，其他架构/运行库需单独审核；文件存在且匹配不等于企业登录、续期或模型调用已验证。
 
 ## 离线验证
 

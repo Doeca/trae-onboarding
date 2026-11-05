@@ -7,6 +7,8 @@
 # environment_check: offline dependencies + saved paths/package/runtime hashes;
 # does not log in, install, open a browser, or execute Magpie/plugin/Bun code.
 
+source "${BASH_SOURCE[0]%/*}/install-deps.sh"
+
 _bootstrap_dependencies() {
     if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4) )); then
         fail bash_4_4_required
@@ -17,7 +19,7 @@ _bootstrap_dependencies() {
         printf '%s\n' '{"event":"stopped","reason":"missing_dependency_jq"}' >&2
         exit 1
     fi
-    for tool in uname curl jq gpg flock timeout setsid sha256sum sync realpath stat mktemp mkdir chmod mv rm cp dd env; do
+    for tool in uname curl jq gpg flock timeout setsid sha256sum sync realpath stat mktemp mkdir chmod mv rm cp dd env od tr grep cmp mkfifo date sleep unzip; do
         command -v "$tool" >/dev/null 2>&1 || fail "missing_dependency_$tool"
     done
     [[ $(uname -s 2>/dev/null) == Linux ]] || fail linux_required
@@ -54,6 +56,9 @@ _bootstrap_plugin_hash() {
 }
 _bootstrap_bun_hash() {
     printf '%s' 10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235
+}
+_bootstrap_bun_archive_hash() {
+    printf '%s' e0446eb55995772eb9894bebae9a6be368d985a8b9271ee124486f9946eedd76
 }
 _bootstrap_host_hash() {
     printf '%s' 25ef7cf0d2813cc25a2e3675c28b5fa9ce9ec87f1b5a621803a193ab3929dbac
@@ -129,8 +134,11 @@ _bootstrap_ask() {
 }
 _bootstrap_confirm() {
     local response
-    _bootstrap_ask response "$1 Type YES to consent" no
-    [[ $response == YES ]] || fail bootstrap_consent_declined
+    _bootstrap_ask response "$1 Press Enter or type yes to consent; type no to cancel" YES
+    case ${response,,} in
+        y|yes) ;;
+        *) fail bootstrap_consent_declined ;;
+    esac
 }
 _bootstrap_ask_path() {
     _bootstrap_ask "$1" "$2 (press Enter to use the displayed default)" "${3:-}"
@@ -138,14 +146,60 @@ _bootstrap_ask_path() {
     _bootstrap_confirm "Use ${!1}?"
 }
 
+_bootstrap_prepare_directory() {
+    local directory=$1 parent
+    _bootstrap_absolute "$directory"
+    if [[ ! -e $directory && ! -L $directory ]]; then
+        parent=${directory%/*}
+        [[ -n $parent ]] || parent=/
+        while [[ ! -e $parent && $parent != / ]]; do parent=${parent%/*}; [[ -n $parent ]] || parent=/; done
+        [[ -d $parent && ! -L $parent && -w $parent && $(stat -c %u -- "$parent") == "$UID" && $((8#$(stat -c %a -- "$parent") & 022)) == 0 ]] || fail unsafe_install_parent
+        _bootstrap_confirm "Create missing directory $directory?"
+        mkdir -p -m 700 -- "$directory" || fail install_directory_creation_failed
+    fi
+    [[ -d $directory && ! -L $directory && -w $directory && $(realpath -e -- "$directory") == "$directory" && $(stat -c %u -- "$directory") == "$UID" && $((8#$(stat -c %a -- "$directory") & 022)) == 0 ]] || fail unsafe_install_parent
+}
+
+_bootstrap_fetch() {
+    local url=$1 output=$2 rc=0 code
+    [[ $url =~ ^https://[^/@[:space:]]+(/[^[:space:]]*)?$ && $url != *'"'* && $url != *'\\'* ]] || fail invalid_artifact_url
+    local args=(-q -4 --fail --silent --show-error --location --proto '=https' --proto-redir '=https'
+        --connect-timeout 8 --max-time 90 --max-filesize 268435456 --output "$output" --url "$url")
+    timeout --kill-after=2s 95s curl "${args[@]}" >/dev/null 2>&1 || rc=$?
+    if (( rc != 0 )); then
+        case $rc in
+            5|6|7|18|28|52|55|56|124)
+                code=$(timeout --kill-after=2s 17s curl -q -4 -sS --head --location --proto '=https' --proto-redir '=https' --connect-timeout 5 --max-time 15 --output /dev/null --write-out '%{http_code}' --url "$url" 2>/dev/null) || fail runtime_download_unavailable
+                [[ $code == 200 ]] || fail runtime_download_unavailable
+                timeout --kill-after=2s 95s curl "${args[@]}" >/dev/null 2>&1 || fail runtime_download_unavailable ;;
+            *) fail runtime_download_rejected ;;
+        esac
+    fi
+}
+
+_bootstrap_install_asset() {
+    local source=$1 destination=$2 expected=$3 mode=$4
+    _bootstrap_hash "$source" "$expected" || fail runtime_artifact_checksum_mismatch
+    [[ ! -e $destination && ! -L $destination ]] || fail runtime_install_would_overwrite
+    _bootstrap_prepare_directory "${destination%/*}"
+    (
+        set -o noclobber
+        umask 077
+        exec {asset_fd}>"$destination" || exit 1
+        dd if="$source" status=none >&"$asset_fd" || exit 1
+        chmod "$mode" -- "$destination" && sync -f "$destination"
+    ) >/dev/null 2>&1 || fail runtime_install_failed_inspect_new_target
+    _bootstrap_hash "$destination" "$expected" || fail runtime_installed_checksum_mismatch
+}
+
 _bootstrap_download_magpie() {
     local destination=$1 work=$2 url expected rc=0 code
     [[ ! -e $destination && ! -L $destination ]] || fail magpie_install_would_overwrite
     local parent=${destination%/*}
     [[ -d $parent && -w $parent && $(stat -c %u -- "$parent") == "$UID" && $((8#$(stat -c %a -- "$parent") & 022)) == 0 ]] || fail magpie_install_parent_requires_manual_setup
-    _bootstrap_ask url 'Trusted HTTPS URL for a standalone Linux Magpie executable (not an archive or install script)'
+    _bootstrap_ask url 'HTTPS URL for the pinned Magpie v0.1.1364 Linux executable' 'https://github.com/yetone/magpie-releases/releases/download/v0.1.1364/magpie-cli-linux-amd64'
     [[ $url =~ ^https://[^/@[:space:]]+(/[^[:space:]]*)?$ && $url != *'"'* && $url != *'\'* ]] || fail invalid_magpie_artifact_url
-    _bootstrap_ask expected 'Trusted SHA256 from an independently verified release manifest'
+    _bootstrap_ask expected 'Pinned SHA256 from the verified release manifest' "$(_bootstrap_magpie_hash)"
     [[ $expected =~ ^[[:xdigit:]]{64}$ ]] || fail invalid_magpie_artifact_sha256
     expected=${expected,,}
     [[ $expected == "$(_bootstrap_magpie_hash)" ]] || fail unsupported_magpie_artifact_manifest
@@ -185,6 +239,44 @@ _bootstrap_download_magpie() {
     emit magpie_installed
 }
 
+_bootstrap_platform() {
+    [[ $(uname -s) == Linux ]] || fail linux_required
+    case $(uname -m) in x86_64|amd64) ;; *) fail pinned_runtime_requires_linux_x86_64;; esac
+    local loader
+    for loader in /lib/ld-musl-*.so.1; do
+        [[ ! -e $loader ]] || fail pinned_runtime_requires_glibc
+    done
+}
+
+_bootstrap_install_runtimes() {
+    local work=$1 artifact_dir
+    if [[ -e $bun_path || -L $bun_path ]]; then
+        [[ -x $bun_path ]] && _bootstrap_hash "$bun_path" "$(_bootstrap_bun_hash)" || fail pinned_bun_missing_or_mismatch
+    fi
+    if [[ -e $host_path || -L $host_path ]]; then
+        _bootstrap_hash "$host_path" "$(_bootstrap_host_hash)" || fail pinned_host_missing_or_mismatch
+    fi
+    if [[ ! -e $bun_path ]]; then
+        _bootstrap_confirm "Download official Bun 1.4.4 (Linux x64 baseline), verify and install at $bun_path?"
+        artifact_dir=$(mktemp -d "$work/bun.XXXXXXXX") || fail bootstrap_temporary_failed
+        _bootstrap_fetch 'https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64-baseline.zip' "$artifact_dir/bun.zip"
+        _bootstrap_hash "$artifact_dir/bun.zip" "$(_bootstrap_bun_archive_hash)" || fail bun_archive_checksum_mismatch
+        # Extract only the expected member to a private file, never archive paths.
+        timeout --kill-after=2s 30s unzip -p "$artifact_dir/bun.zip" bun-linux-x64-baseline/bun > "$artifact_dir/bun" 2>/dev/null || fail bun_archive_invalid
+        _bootstrap_install_asset "$artifact_dir/bun" "$bun_path" "$(_bootstrap_bun_hash)" 700
+        emit bun_installed
+    fi
+    if [[ ! -e $host_path ]]; then
+        _bootstrap_confirm "Download the pinned original Magpie host source, verify and install at $host_path?"
+        artifact_dir=$(mktemp -d "$work/host.XXXXXXXX") || fail bootstrap_temporary_failed
+        _bootstrap_fetch 'https://raw.githubusercontent.com/yetone/magpie/dd1e8822d916f8aeb085db4db93fc3d79e2263ed/internal/plugin/host.js' "$artifact_dir/host.js"
+        _bootstrap_install_asset "$artifact_dir/host.js" "$host_path" "$(_bootstrap_host_hash)" 600
+        emit host_installed
+    fi
+    [[ -x $bun_path ]] && _bootstrap_hash "$bun_path" "$(_bootstrap_bun_hash)" || fail pinned_bun_missing_or_mismatch
+    _bootstrap_hash "$host_path" "$(_bootstrap_host_hash)" || fail pinned_host_missing_or_mismatch
+}
+
 _bootstrap_install_plugin() {
     local work=$1 package_dir=${plugin_path%/*}
     _bootstrap_absolute "$plugin_path"
@@ -203,6 +295,7 @@ _bootstrap_install_plugin() {
     # discarded, not forwarded or retained as a possibly sensitive log.
     (cd "$PROJECT" && timeout --kill-after=5s 180s env -i PATH="$PATH" HOME="$HOME" \
         XDG_CONFIG_HOME="$config_home" XDG_CACHE_HOME="$work/cache" TMPDIR="$work/native-tmp" \
+        BUN_INSTALL_CACHE_DIR="$work/cache/bun-packages" npm_config_cache="$work/cache/npm" \
         MAGPIE_BUN="$runtime" MAGPIE_NO_ACCOUNTS=1 BROWSER=/bin/false DISPLAY= WAYLAND_DISPLAY= \
         NO_COLOR=1 TERM=dumb "$magpie_bin" plugin add '@magpie-community/opencode-trae-auth@0.2.26') \
         </dev/null >/dev/null 2>&1 || fail native_plugin_install_unknown_reconcile_before_retry
@@ -222,8 +315,10 @@ _bootstrap_default_magpie() {
 
 bootstrap_interactive() (
     # Subshell owns descriptors, umask and cleanup without disturbing the caller.
-    _bootstrap_dependencies
     _bootstrap_open_tty
+    _bootstrap_install_dependencies
+    _bootstrap_dependencies
+    _bootstrap_platform
     _bootstrap_layout
     umask 077
     local work='' lock_fd candidate config_new
@@ -240,15 +335,19 @@ bootstrap_interactive() (
         _bootstrap_confirm 'Replace the saved onboarding installation path selection (no existing executables/plugins will be overwritten)?'
     fi
     candidate=$(_bootstrap_default_magpie)
-    _bootstrap_ask_path magpie_bin 'Absolute path to existing Magpie, or a NEW executable filename in an existing user-owned directory' "$candidate"
+    _bootstrap_ask_path magpie_bin 'Absolute path to the existing or new Magpie executable' "$candidate"
+    _bootstrap_prepare_directory "${magpie_bin%/*}"
+    if [[ -e $magpie_bin || -L $magpie_bin ]]; then
+        [[ -f $magpie_bin && -x $magpie_bin && ! -L $magpie_bin ]] || fail magpie_existing_path_not_executable
+        _bootstrap_hash "$magpie_bin" "$(_bootstrap_magpie_hash)" || fail pinned_magpie_mismatch
+    fi
     _bootstrap_ask_path config_home 'Absolute native XDG config home (PARENT of magpie, not plugin directory)' "${config_home:-${XDG_CONFIG_HOME:-$HOME/.config}}"
-    [[ -d $config_home && -w $config_home ]] || fail config_home_requires_manual_setup
+    _bootstrap_prepare_directory "$config_home"
     plugin_path=$(_bootstrap_plugin_path)
     _bootstrap_confirm "Use native plugin location $plugin_path (derived, not separately configurable)?"
-    _bootstrap_ask_path bun_path 'Existing pinned Bun 1.4.4 executable; missing assets must be provisioned from a trusted source before retrying' "${bun_path:-${XDG_CACHE_HOME:-$HOME/.cache}/magpie/bun/1.4.4/magpie-bun}"
-    _bootstrap_ask_path host_path 'Existing pinned host-25ef7cf0d281.js; missing assets must be provisioned from a trusted source before retrying' "${host_path:-${XDG_CACHE_HOME:-$HOME/.cache}/magpie/plugin-host/host-25ef7cf0d281.js}"
-    [[ -x $bun_path ]] && _bootstrap_hash "$bun_path" "$(_bootstrap_bun_hash)" || fail pinned_bun_missing_or_mismatch
-    _bootstrap_hash "$host_path" "$(_bootstrap_host_hash)" || fail pinned_host_missing_or_mismatch
+    _bootstrap_ask_path bun_path 'Pinned Bun 1.4.4 executable (download if missing)' "${bun_path:-${XDG_CACHE_HOME:-$HOME/.cache}/magpie/bun/1.4.4/magpie-bun}"
+    _bootstrap_ask_path host_path 'Pinned host-25ef7cf0d281.js (download if missing)' "${host_path:-${XDG_CACHE_HOME:-$HOME/.cache}/magpie/plugin-host/host-25ef7cf0d281.js}"
+    _bootstrap_install_runtimes "$work"
     if [[ -e $magpie_bin || -L $magpie_bin ]]; then
         [[ -f $magpie_bin && -x $magpie_bin && ! -L $magpie_bin ]] || fail magpie_existing_path_not_executable
     else

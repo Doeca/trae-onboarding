@@ -66,7 +66,7 @@ if [[ $COMMAND == status ]]; then
     jq '{event:"status",status,reason,model_publication,gateway_status:.gateway.status,tasks:[.members[]|{id,email,phase}]}' "$STATE_FILE"
     exit
 fi
-if [[ ! -f $TMP/shell-install.json ]]; then bootstrap_interactive; fi
+if [[ ! -f $TMP/shell-install.json && $COMMAND != doctor ]]; then bootstrap_interactive; fi
 load_install_config
 environment_check
 [[ $COMMAND != doctor ]] || exit 0

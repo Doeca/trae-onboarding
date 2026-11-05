@@ -4,7 +4,7 @@
 
 ## 环境与配置
 
-需要 Linux、Bash 4.4+、curl、jq、GPG 和常见 GNU/coreutils/util-linux 工具，以及审核版本的原生 Magpie、Trae 插件和 Bun/宿主运行时。当前不支持任意版本或 macOS 原生运行环境。
+支持 Linux x86_64/glibc，启动需要 Bash 4.4+ 和发行版包管理器。`bootstrap` 负责补装缺失系统工具，以及固定版本的 Magpie、Trae 插件和 Bun/宿主运行时；系统包安装支持 Debian/Ubuntu 和文档列出的 dnf/yum 发行版。当前不支持任意版本、ARM64 或 macOS 原生运行环境。
 
 在自己的本地终端执行：
 
@@ -15,7 +15,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-`bootstrap` 交互确认安装与配置路径；缺失安装需要明确同意，不自行覆盖或升级。`doctor` 仅离线检查，不登录管理员、不创建成员。编辑 `.env` 填入自己的 `TRAE_ADMIN_ACCOUNT` 和 `TRAE_ADMIN_PASSWORD`，不要将真实凭证放入 Git 或聊天。
+`bootstrap` 显示默认路径，回车选用；确认提示默认 `[YES]`，回车同意、输入 `no` 取消。缺失目录和依赖在提示后创建/安装，不覆盖已有运行时；非 root 安装系统包需要 sudo。`doctor` 仅离线检查，不登录管理员、不创建成员。编辑 `.env` 填入自己的 `TRAE_ADMIN_ACCOUNT` 和 `TRAE_ADMIN_PASSWORD`，不要将真实凭证放入 Git 或聊天。
 
 完整参数、恢复步骤和已知限制见 [Bash 使用说明](docs/BASH-USAGE.md)，安装约束见 [交互环境安装说明](docs/BASH-SETUP.md)。
 

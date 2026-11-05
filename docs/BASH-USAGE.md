@@ -15,11 +15,11 @@ bash onboarding.sh bootstrap
 bash onboarding.sh doctor
 ```
 
-`bootstrap` 会询问 Magpie 可执行文件位置、配置位置、Trae 插件位置及所需运行时位置。路径提示显示默认值，留空回车即可选用，随后仍须明确确认；不会覆盖已有安装。Magpie 可执行文件默认优先使用已保存的路径或 PATH 中的安装，否则使用 `$HOME/.local/bin/magpie`（尊重 `MAGPIE_BIN_DIR`）。原生插件安装目录由所选 Magpie 配置位置决定，脚本展示派生路径供确认，不假装支持原生命令不存在的任意目录选项。
+`bootstrap` 会询问 Magpie 可执行文件位置、配置位置、Trae 插件位置及所需运行时位置。路径提示显示默认值，留空回车即可选用；后续确认提示默认 `[YES]`，回车同意、输入 `no` 取消，EOF 仍停止。不会覆盖已有安装。Magpie 可执行文件默认优先使用已保存的路径或 PATH 中的安装，否则使用 `$HOME/.local/bin/magpie`（尊重 `MAGPIE_BIN_DIR`）。原生插件安装目录由所选 Magpie 配置位置决定，脚本展示派生路径供确认，不假装支持原生命令不存在的任意目录选项。
 
-Magpie 缺失时输入审核过的 HTTPS 独立可执行文件下载地址和 SHA256，先下载到专用临时目录再校验安装，**不执行 curl | sh**。当前仅支持已审核 manifest 中的二进制、Trae 插件及 Bun/宿主版本，不自动接受 latest。缺失已审核的运行时文件时暂停，不能把“插件安装成功”当成运行环境已经齐备。
+Magpie 缺失时，下载地址和 SHA256 默认使用已审核的 v0.1.1364 Linux CLI 发布文件。Bun 1.4.4、固定宿主文件和 Trae 插件缺失时，也由脚本下载/安装；缺失的所选目录在确认后创建。文件先下载到专用临时目录、校验后安装，**不执行 curl | sh**。已有文件不匹配时停止，不覆盖、不自动接受 latest。
 
-依赖：Linux、Bash 4.4+、curl、jq、GPG，以及常见 coreutils/util-linux 工具（flock、timeout、setsid、sha256sum、sync、realpath 等）。缺少系统工具会报告缺失项，**不会自行 sudo 或调用包管理器**。完整安装行为与限制见 [环境安装说明](BASH-SETUP.md)。
+支持 Linux x86_64/glibc，启动需要 Bash 4.4+。缺失的 curl、jq、GPG、coreutils/util-linux、grep、diffutils、unzip 和 CA 证书由 Debian/Ubuntu 的 apt-get 或受支持 RPM 发行版的 dnf/yum 补装；显示计划、确认后执行，非 root 时需 sudo。`doctor` 不安装。完整平台、权限和下载来源限制见 [环境安装说明](BASH-SETUP.md)。
 
 交互安装在飞书桥接或没有控制终端时拒绝，不通过聊天收集本地路径。`doctor` 仅离线检查，不登录管理员、不创建账号；它不是企业在线权限检查。
 
